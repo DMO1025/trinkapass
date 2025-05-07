@@ -84,5 +84,22 @@
     "pix_copia_cola_mp": "00020126580014br.gov.bcb.pix0136d1383dad-724f-43a5-aefe-f7925084bc2752040000530398654042.015802BR5914DEMTRIOSFELIPE6002Po62250521mpqrinter11025380694363047CC2",
     "mp_payment_id": "110253806943",
     "mercado_pago_external_reference": "TRK-c7a61e27-000000006"
+  },
+  {
+    "id": "sale-104577db-f8f",
+    "evento_id": "evt-c7a61e27-b4f9-4ca3-9255-5c7c7e77789b",
+    "nome_comprador": "demetrios",
+    "email_comprador": "demetrios@teste.com",
+    "whatsapp": "11123456789",
+    "quantidade": 1,
+    "preco_ingresso_unitario": 0.01,
+    "taxa_servico_unitaria": 2,
+    "valor_total_item": 2.01,
+    "valor_total_compra": 2.01,
+    "data_compra": "2025-05-07T18:21:20.807Z",
+    "status": "pending_payment",
+    "pix_copia_cola_mp": "00020126580014br.gov.bcb.pix0136d1383dad-724f-43a5-aefe-f7925084bc2752040000530398654042.015802BR5914DEMTRIOSFELIPE6002Po62250521mpqrinter1102864550876304112B",
+    "mp_payment_id": "110286455087",
+    "mercado_pago_external_reference": "TRK-c7a61e27-000000007"
   }
 ]

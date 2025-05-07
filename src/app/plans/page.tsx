@@ -117,7 +117,7 @@ export default function PlansPage() {
             data-ai-hint="event crowd concert"
           />
         <p className="text-muted">
-          Dúvidas sobre qual plano escolher? <Link href="/learn-more#contact" className="text-primary text-decoration-none hover-underline">Fale conosco</Link>.
+          Dúvidas sobre qual plano escolher? <Link href="mailto:contato@trinkapass.com.br?subject=Dúvida sobre Planos TrinkaPass" className="text-primary text-decoration-none hover-underline">Fale conosco</Link>.
         </p>
       </div>
     </div>

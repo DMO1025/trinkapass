@@ -128,7 +128,7 @@ export default function Header() {
     { href: "/", label: "Eventos", icon: <Ticket size={20} /> },
     { href: "/about", label: "Sobre", icon: <Info size={20} /> },
     { href: "/plans", label: "Planos", icon: <FileText size={20} /> },
-    { href: "/learn-more", label: "Saber Mais", icon: <HelpCircle size={20} /> },
+    // { href: "/learn-more", label: "Saber Mais", icon: <HelpCircle size={20} /> }, // Removed link
   ];
 
 
