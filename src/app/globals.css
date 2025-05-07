@@ -1,0 +1,92 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Removed custom body font rule as Geist font is not available
+body {
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+}
+*/
+
+@layer base {
+  :root {
+    --background: 0 0% 96%; /* Light Gray */
+    --foreground: 208 10% 25%; /* Dark Blue-Gray for text */
+    --card: 0 0% 100%; /* White */
+    --card-foreground: 208 10% 25%;
+    --popover: 0 0% 100%; /* White */
+    --popover-foreground: 208 10% 25%;
+    --primary: 207 90% 54%; /* Metro Blue */
+    --primary-foreground: 0 0% 100%; /* White */
+    --secondary: 174 70% 38%; /* Metro Teal */
+    --secondary-foreground: 0 0% 100%; /* White */
+    --muted: 0 0% 92%; /* Lighter Gray */
+    --muted-foreground: 0 0% 45%; /* Medium Gray */
+    --accent: 28 100% 52%; /* Metro Orange */
+    --accent-foreground: 0 0% 10%; /* Dark for text on accent */
+    --destructive: 0 64% 43%; /* Dark Red */
+    --destructive-foreground: 0 0% 98%; /* Light Gray */
+    --border: 0 0% 85%; /* Default Light Gray Border */
+    --input: 0 0% 85%; /* Default Light Gray Input */
+    --ring: 207 90% 54%; /* Metro Blue for focus rings */
+    --chart-1: 207 90% 54%; /* Metro Blue */
+    --chart-2: 174 70% 38%; /* Metro Teal */
+    --chart-3: 28 100% 52%; /* Metro Orange */
+    --chart-4: 207 90% 68%;   /* Lighter Metro Blue */
+    --chart-5: 174 70% 52%; /* Lighter Metro Teal */
+    --radius: 0.1rem; /* Sharper corners for Metro UI feel */
+
+    /* Sidebar Light Theme */
+    --sidebar-background: 0 0% 98%; /* Very light gray, almost white */
+    --sidebar-foreground: 208 10% 25%; /* Same as main foreground */
+    --sidebar-primary: 207 90% 54%; /* Metro Blue */
+    --sidebar-primary-foreground: 0 0% 100%; /* White */
+    --sidebar-accent: 28 100% 52%; /* Metro Orange */
+    --sidebar-accent-foreground: 0 0% 10%; /* Dark */
+    --sidebar-border: 0 0% 88%;
+    --sidebar-ring: 207 90% 54%; /* Metro Blue */
+  }
+
+  .dark {
+    --background: 208 15% 12%; /* Very Dark Blue */
+    --foreground: 0 0% 90%; /* Light Gray */
+    --card: 208 15% 18%; /* Slightly Lighter Dark Blue */
+    --card-foreground: 0 0% 90%; /* Light Gray */
+    --popover: 208 15% 18%; /* Slightly Lighter Dark Blue */
+    --popover-foreground: 0 0% 90%; /* Light Gray */
+    --primary: 207 85% 60%; /* Brighter Metro Blue */
+    --primary-foreground: 0 0% 10%; /* Dark Gray for text on primary */
+    --secondary: 174 70% 50%; /* Brighter Metro Teal */
+    --secondary-foreground: 0 0% 10%; /* Dark Gray for text on secondary */
+    --muted: 208 15% 22%; /* Darker Gray */
+    --muted-foreground: 0 0% 60%; /* Medium Gray */
+    --accent: 28 100% 60%; /* Brighter Metro Orange */
+    --accent-foreground: 0 0% 10%; /* Dark Gray for text on accent */
+    --destructive: 0 70% 50%; /* Brighter Red */
+    --destructive-foreground: 0 0% 90%; /* Light Gray */
+    --border: 208 15% 25%; /* Dark Gray Border */
+    --input: 208 15% 25%; /* Dark Gray Input */
+    --ring: 207 85% 60%; /* Brighter Metro Blue for focus rings */
+    --chart-1: 207 85% 60%;
+    --chart-2: 174 70% 50%;
+    --chart-3: 28 100% 60%;
+    --chart-4: 207 85% 70%;
+    --chart-5: 174 70% 60%;
+
+    /* Sidebar Dark Theme */
+    --sidebar-background: 208 15% 15%; /* Darker than card, distinct */
+    --sidebar-foreground: 0 0% 90%;
+    --sidebar-primary: 207 85% 60%; /* Brighter Metro Blue */
+    --sidebar-primary-foreground: 0 0% 10%;
+    --sidebar-accent: 28 100% 60%; /* Brighter Metro Orange */
+    --sidebar-accent-foreground: 0 0% 10%;
+    --sidebar-border: 208 15% 22%;
+    --sidebar-ring: 207 85% 60%;
+  }
+}
+
+/*
+  body {
+    @apply bg-background text-foreground; // Removed to allow Bootstrap body styles to take precedence
+  }
+*/

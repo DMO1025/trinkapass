@@ -1,0 +1,18 @@
+[
+  {
+    "id": "evt-c7a61e27-b4f9-4ca3-9255-5c7c7e77789b",
+    "organizer_id": "org-4b2a4d11-e809-4382-8dea-bacc352f6d6a",
+    "nome_evento": "trinka fest",
+    "descricao": "asdasdasd dasdasdasdsd",
+    "nome_local_evento": "Praça da Fonte Luminosa",
+    "cep": "08568500",
+    "local": "Rua Gaudêncio Romano, Jardim Nova Poá",
+    "cidade": "Poá",
+    "preco_ingresso": 0.01,
+    "quantidade_total": 50,
+    "data_horario": "2025-05-07T21:00:00.000Z",
+    "quantidade_disponivel": 49,
+    "imagem_url": "https://picsum.photos/seed/evt-c7a61e27-b4f9-4ca3-9255-5c7c7e77789b/800/400",
+    "next_sale_reference_number": 7
+  }
+]
