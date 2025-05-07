@@ -28,7 +28,9 @@ import {
     getWithdrawalRequests, 
     addWithdrawalRequest, 
     updateWithdrawalRequestStatus,
-    getWithdrawalRequestsByOrganizerId // Added
+    getWithdrawalRequestsByOrganizerId,
+    getSaleByMercadoPagoExternalReference, // Added
+    updateSale // Added
 } from './data-service';
 
 // Re-export all functions that are intended for server-side use.
@@ -55,7 +57,9 @@ export {
     getWithdrawalRequests, 
     addWithdrawalRequest, 
     updateWithdrawalRequestStatus,
-    getWithdrawalRequestsByOrganizerId // Export
+    getWithdrawalRequestsByOrganizerId,
+    getSaleByMercadoPagoExternalReference, // Export
+    updateSale // Export
 };
 
 // Example of a server-only function if you needed one that isn't in data-service.ts
@@ -63,3 +67,4 @@ export {
 //   // ... server-only logic, e.g., accessing environment variables directly
 //   return { data: "sensitive server data" };
 // }
+

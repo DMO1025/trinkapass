@@ -1,4 +1,5 @@
 
+import * as React from "react"; // Added import
 import Image from "next/image";
 import Link from "next/link";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"; // Keep ShadCN Accordion
