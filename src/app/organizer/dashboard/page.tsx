@@ -1,11 +1,12 @@
+
 'use client';
 
 import { useAuth } from "@/contexts/AuthContext";
-import { PlusCircle, CalendarDays, Users, Loader2, AlertTriangle, Pencil, DollarSign, WalletCards, Settings, Eye, Send, Activity, ListChecks, ChevronLeft, ChevronRight, ListFilter } from "lucide-react"; 
+import { PlusCircle, CalendarDays, Users, Loader2, AlertTriangle, Pencil, DollarSign, WalletCards, Settings, Eye, Send, Activity, ListChecks, ChevronLeft, ChevronRight, ListFilter, CheckSquare, Clock, Hourglass } from "lucide-react"; 
 import Link from "next/link";
 import { useEffect, useState, useMemo } from "react";
-import type { EventData, WithdrawalRequestData } from "@/lib/types"; 
-import { getEventsByOrganizerId, getSalesByEventId, addWithdrawalRequest, getWithdrawalRequestsByOrganizerId } from "@/lib/data-service.server"; 
+import type { EventData, SaleData, WithdrawalRequestData } from "@/lib/types"; 
+import { getEventsByOrganizerId, getSalesByOrganizerId, addWithdrawalRequest, getWithdrawalRequestsByOrganizerId, processRevenueClearance as serverProcessRevenueClearance } from "@/lib/data-service.server"; 
 import Image from "next/image";
 import { useToast } from "@/hooks/use-toast"; 
 import { useRouter } from "next/navigation";
@@ -16,7 +17,9 @@ import { Button as ShadButton } from "@/components/ui/button";
 
 interface DisplayEventData extends EventData {
   paidTicketsCount: number;
-  netRevenue: number;
+  netRevenueFromPaid: number; // Total net from paid sales
+  netRevenuePendingClearance: number; // Net from paid sales, still pending clearance
+  netRevenueCleared: number; // Net from paid sales, cleared and available
   uniquePaidBuyersCount: number;
 }
 
@@ -33,7 +36,8 @@ export default function OrganizerDashboardPage() {
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
-  const [totalNetRevenueAllEvents, setTotalNetRevenueAllEvents] = useState<number>(0);
+  const [totalNetRevenueAllEventsCleared, setTotalNetRevenueAllEventsCleared] = useState<number>(0);
+  const [totalNetRevenueAllEventsPendingClearance, setTotalNetRevenueAllEventsPendingClearance] = useState<number>(0); 
   const [totalApprovedWithdrawalsAmount, setTotalApprovedWithdrawalsAmount] = useState<number>(0);
   const [totalPendingWithdrawalsAmount, setTotalPendingWithdrawalsAmount] = useState<number>(0);
   
@@ -47,21 +51,26 @@ export default function OrganizerDashboardPage() {
   const [withdrawalsCurrentPage, setWithdrawalsCurrentPage] = useState(1);
   
   const currentAvailableForWithdrawal = useMemo(() => {
-    return totalNetRevenueAllEvents - (totalApprovedWithdrawalsAmount + totalPendingWithdrawalsAmount);
-  }, [totalNetRevenueAllEvents, totalApprovedWithdrawalsAmount, totalPendingWithdrawalsAmount]);
+    return totalNetRevenueAllEventsCleared - (totalApprovedWithdrawalsAmount + totalPendingWithdrawalsAmount);
+  }, [totalNetRevenueAllEventsCleared, totalApprovedWithdrawalsAmount, totalPendingWithdrawalsAmount]);
 
   const hasPendingWithdrawal = useMemo(() => totalPendingWithdrawalsAmount > 0, [totalPendingWithdrawalsAmount]);
 
-  useEffect(() => {
-    async function fetchDashboardData() {
-      if (!organizerUser || !organizerUser.id) return;
+  async function fetchDashboardData() {
+      if (!organizerUser || !organizerUser.id) {
+          setIsLoadingData(false);
+          return;
+      }
       setIsLoadingData(true);
       setError(null);
       
       try {
-        const [fetchedEvents, fetchedOrganizerWithdrawals] = await Promise.all([
+        await serverProcessRevenueClearance();
+
+        const [fetchedEvents, fetchedOrganizerWithdrawals, fetchedOrganizerSales] = await Promise.all([
           getEventsByOrganizerId(organizerUser.id),
-          getWithdrawalRequestsByOrganizerId(organizerUser.id) 
+          getWithdrawalRequestsByOrganizerId(organizerUser.id),
+          getSalesByOrganizerId(organizerUser.id)
         ]);
 
         setOrganizerWithdrawals(fetchedOrganizerWithdrawals.sort((a,b) => new Date(b.requestDate).getTime() - new Date(a.requestDate).getTime()));
@@ -76,29 +85,42 @@ export default function OrganizerDashboardPage() {
           .reduce((sum, req) => sum + req.amount, 0);
         setTotalPendingWithdrawalsAmount(pendingWithdrawalsSum);
         
-        const eventsWithFinancials: DisplayEventData[] = await Promise.all(
-          fetchedEvents.map(async (event) => {
-            const sales = await getSalesByEventId(event.id);
-            const paidSales = sales.filter(s => s.status === 'paid');
+        let overallClearedRevenue = 0;
+        let overallPendingClearanceRevenue = 0; 
+
+        const eventsWithFinancials: DisplayEventData[] = fetchedEvents.map(event => {
+            const salesForThisEvent = fetchedOrganizerSales.filter(s => s.evento_id === event.id && s.status === 'paid');
             
-            const paidTicketsCount = paidSales.reduce((acc, s) => acc + s.quantidade, 0);
-            const netRevenue = paidSales.reduce(
-              (acc, sale) => acc + (sale.preco_ingresso_unitario * sale.quantidade), 0
+            const paidTicketsCount = salesForThisEvent.reduce((acc, s) => acc + s.quantidade, 0);
+            const netRevenueFromPaid = salesForThisEvent.reduce(
+              (acc, sale) => acc + (sale.organizer_net_revenue || 0), 0
             );
-            const uniquePaidBuyersCount = new Set(paidSales.map(s => s.email_comprador)).size; 
+            const netRevenuePendingClearanceForEvent = salesForThisEvent
+              .filter(s => s.organizer_revenue_status === 'pending_clearance')
+              .reduce((acc, s) => acc + (s.organizer_net_revenue || 0), 0);
+            
+            const netRevenueClearedForEvent = salesForThisEvent
+              .filter(s => s.organizer_revenue_status === 'cleared')
+              .reduce((acc, s) => acc + (s.organizer_net_revenue || 0), 0);
+            
+            overallClearedRevenue += netRevenueClearedForEvent;
+            overallPendingClearanceRevenue += netRevenuePendingClearanceForEvent; 
+            
+            const uniquePaidBuyersCount = new Set(salesForThisEvent.map(s => s.email_comprador)).size; 
             
             return { 
               ...event, 
               paidTicketsCount,
-              netRevenue,
+              netRevenueFromPaid,
+              netRevenuePendingClearance: netRevenuePendingClearanceForEvent,
+              netRevenueCleared: netRevenueClearedForEvent,
               uniquePaidBuyersCount
             };
-          })
-        );
-        setEvents(eventsWithFinancials.sort((a, b) => new Date(b.data_horario).getTime() - new Date(a.data_horario).getTime()));
+          });
 
-        const totalRevenueFromEvents = eventsWithFinancials.reduce((sum, event) => sum + event.netRevenue, 0);
-        setTotalNetRevenueAllEvents(totalRevenueFromEvents);
+        setEvents(eventsWithFinancials.sort((a, b) => new Date(b.data_horario).getTime() - new Date(a.data_horario).getTime()));
+        setTotalNetRevenueAllEventsCleared(overallClearedRevenue);
+        setTotalNetRevenueAllEventsPendingClearance(overallPendingClearanceRevenue); 
 
       } catch (err) {
         console.error("Failed to fetch events or sales for dashboard:", err);
@@ -108,6 +130,8 @@ export default function OrganizerDashboardPage() {
       }
     }
 
+
+  useEffect(() => {
     if (organizerUser && !authLoading) {
       fetchDashboardData();
     } else if (!authLoading && !organizerUser) {
@@ -157,8 +181,9 @@ export default function OrganizerDashboardPage() {
         idPhotoDataUri: organizerUser.id_photo_data_uri,
       };
       const newRequest = await addWithdrawalRequest(requestPayload);
-      setOrganizerWithdrawals(prev => [newRequest, ...prev].sort((a,b) => new Date(b.requestDate).getTime() - new Date(a.requestDate).getTime()));
-      setTotalPendingWithdrawalsAmount(prev => prev + newRequest.amount); 
+      
+      await fetchDashboardData();
+
       setShowWithdrawalInputModal(false);
       toast({
         title: "Solicitação de Saque Enviada",
@@ -305,30 +330,35 @@ export default function OrganizerDashboardPage() {
         {/* Overview / Financial Section */}
         <div className={`tab-pane fade ${activeSection === 'overview' ? 'show active' : ''}`} id="overview-tab-pane" role="tabpanel" aria-labelledby="overview-tab">
           <div className="card border">
-            <div className="card-header bg-light p-3 p-md-4">
+            <div className="card-header bg-light p-3 p-md-4 d-flex justify-content-between align-items-center">
               <h2 className="card-title fs-4 fw-semibold d-flex align-items-center gap-2 mb-0">
                 <DollarSign className="text-primary" /> Resumo Financeiro
               </h2>
+              <ShadButton onClick={fetchDashboardData} variant="outline" size="sm" className="btn-sm d-flex align-items-center gap-1">
+                <Clock className="h-4 w-4" /> Atualizar Saldos
+              </ShadButton>
             </div>
             <div className="card-body p-3 p-md-4">
                 <div className="mb-3">
                     <span className="display-4 fw-bold text-primary">
                         R$ {currentAvailableForWithdrawal.toFixed(2).replace('.', ',')}
                     </span>
-                    <p className="text-muted small mt-1">Disponível para saque</p>
+                    <p className="text-muted small mt-1">Disponível para saque (Saldo liberado menos saques pendentes/aprovados)</p>
                 </div>
                 <div className="row g-3 mb-3">
-                    <div className="col-md-4 col-sm-6">
-                        <p className="fs-5 text-dark mb-0">R$ {totalNetRevenueAllEvents.toFixed(2).replace('.', ',')}</p>
-                        <p className="small text-muted">Ganhos totais (bruto)</p>
+                     <div className="col-md-4 col-sm-6">
+                        <p className="fs-5 text-info mb-0 d-flex align-items-center gap-1">
+                           <Hourglass size={16} className="text-info-emphasis"/> R$ {totalNetRevenueAllEventsPendingClearance.toFixed(2).replace('.', ',')}
+                        </p>
+                        <p className="small text-muted">Total pendente de liberação (3 dias úteis)</p>
                     </div>
                     <div className="col-md-4 col-sm-6">
                         <p className="fs-5 text-success-emphasis mb-0">R$ {totalApprovedWithdrawalsAmount.toFixed(2).replace('.', ',')}</p>
-                        <p className="small text-muted">Total já sacado</p>
+                        <p className="small text-muted">Total já sacado (aprovado)</p>
                     </div>
                     <div className="col-md-4 col-sm-6">
                         <p className="fs-5 text-warning-emphasis mb-0">R$ {totalPendingWithdrawalsAmount.toFixed(2).replace('.', ',')}</p>
-                        <p className="small text-muted">Saques pendentes</p>
+                        <p className="small text-muted">Saques pendentes (aguardando aprovação)</p>
                     </div>
                 </div>
               
@@ -355,7 +385,7 @@ export default function OrganizerDashboardPage() {
                 <div className="alert alert-warning small mt-3 d-flex align-items-center gap-2">
                   <AlertTriangle className="h-5 w-5 shrink-0" />
                   <div>
-                    Para solicitar saques, por favor, complete suas <Link href="/organizer/settings/withdrawal" className="alert-link">configurações de saque e verificação</Link> e aguarde a aprovação da administração.
+                    Para solicitar saques, por favor, complete suas <Link href="/organizer/settings/withdrawal" className="alert-link">configurações de saque e verificação</Link>.
                   </div>
                 </div>
               )}
@@ -399,23 +429,29 @@ export default function OrganizerDashboardPage() {
                               {eventDate} às {new Date(event.data_horario).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} - {event.local}
                             </p>
                             
-                            <div className="row row-cols-1 row-cols-sm-2 row-cols-lg-3 g-3 mt-2 mb-3">
+                            <div className="row row-cols-1 row-cols-sm-2 row-cols-lg-4 g-3 mt-2 mb-3">
                               <div className="col">
-                                <div className="p-2 bg-light-subtle border rounded-2">
-                                  <p className="small fw-medium mb-0 text-muted">Ingressos Pagos</p>
+                                <div className="p-2 bg-light-subtle border rounded-2 text-center">
+                                  <p className="small fw-medium mb-0 text-muted">Ing. Pagos</p>
                                   <p className="fs-6 fw-bold mb-0 text-success">{event.paidTicketsCount} / {event.quantidade_total}</p>
                                 </div>
                               </div>
-                              <div className="col">
-                                <div className="p-2 bg-light-subtle border rounded-2">
-                                  <p className="small fw-medium mb-0 text-muted">Valor a Receber</p>
-                                  <p className="fs-6 fw-bold mb-0 text-primary">R$ {event.netRevenue.toFixed(2).replace('.', ',')}</p>
+                               <div className="col">
+                                <div className="p-2 bg-light-subtle border rounded-2 text-center">
+                                  <p className="small fw-medium mb-0 text-muted">Receita (Bruta)</p>
+                                  <p className="fs-6 fw-bold mb-0 text-primary">R$ {event.netRevenueFromPaid.toFixed(2).replace('.', ',')}</p>
+                                </div>
+                              </div>
+                               <div className="col">
+                                <div className="p-2 bg-light-subtle border rounded-2 text-center">
+                                  <p className="small fw-medium mb-0 text-muted">A Liberar</p>
+                                  <p className="fs-6 fw-bold mb-0 text-warning-emphasis">R$ {event.netRevenuePendingClearance.toFixed(2).replace('.', ',')}</p>
                                 </div>
                               </div>
                               <div className="col">
-                                <div className="p-2 bg-light-subtle border rounded-2">
-                                  <p className="small fw-medium mb-0 text-muted">Disponíveis</p>
-                                  <p className="fs-6 fw-bold mb-0 text-info">{event.quantidade_disponivel}</p>
+                                <div className="p-2 bg-light-subtle border rounded-2 text-center">
+                                  <p className="small fw-medium mb-0 text-muted">Liberado</p>
+                                  <p className="fs-6 fw-bold mb-0 text-success-emphasis">R$ {event.netRevenueCleared.toFixed(2).replace('.', ',')}</p>
                                 </div>
                               </div>
                             </div>
@@ -524,6 +560,9 @@ export default function OrganizerDashboardPage() {
             <p className="text-xs text-muted-foreground">
                 O valor será transferido para a Chave PIX: <span className="font-medium text-foreground">{organizerUser.pix_key_type?.toUpperCase()}: {organizerUser.pix_key}</span>.
             </p>
+             <p className="text-xs text-muted-foreground">
+                A transferência será realizada em até 3 dias úteis após a aprovação da administração.
+            </p>
           </div>
           <DialogFooter>
             <DialogClose asChild>
@@ -539,3 +578,5 @@ export default function OrganizerDashboardPage() {
     </div>
   );
 }
+
+    

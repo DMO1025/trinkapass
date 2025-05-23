@@ -1,7 +1,7 @@
 // src/app/api/webhooks/mercadopago/route.ts
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
-import { updateSale, getSaleByMercadoPagoExternalReference, updateEventStock, getSettings, getEventById } from '@/lib/data-service.server';
+import { updateSale, getSaleByMercadoPagoExternalReference, updateEventStock, getEventById } from '@/lib/data-service.server'; // getSettings removed
 import type { SaleData } from '@/lib/types';
 import { revalidatePath } from 'next/cache';
 
@@ -9,6 +9,8 @@ import { revalidatePath } from 'next/cache';
 // from Mercado Pago to ensure the request is legitimate.
 // This usually involves using a shared secret.
 // const MERCADO_PAGO_WEBHOOK_SECRET = process.env.MERCADO_PAGO_WEBHOOK_SECRET;
+
+const THREE_DAYS_IN_MS = 3 * 24 * 60 * 60 * 1000;
 
 export async function POST(request: NextRequest) {
   console.log('Mercado Pago Webhook Received -- LOGGING_ROUTE_ENTRY_V3_API_CONFIRM');
@@ -31,23 +33,23 @@ export async function POST(request: NextRequest) {
 
       console.log(`Webhook V3_API_CONFIRM: Processing MP Payment ID ${paymentIdFromMP} from type '${body.type}'. Action: '${body.action}'.`);
 
-      const appSettings = await getSettings();
-      const accessToken = appSettings.mercadoPagoAccessToken || process.env.MERCADO_PAGO_ACCESS_TOKEN;
+      // Use environment variable directly for the access token
+      const accessToken = process.env.MERCADO_PAGO_ACCESS_TOKEN;
 
       if (!accessToken) {
         console.error('Webhook V3_API_CONFIRM: Mercado Pago Access Token is not configured.');
         return NextResponse.json({ error: 'Payment processing configuration error.' }, { status: 500 });
       }
-      
+
       console.log(`Webhook V3_API_CONFIRM: Attempting to fetch payment details from Mercado Pago API for MP Payment ID: ${paymentIdFromMP}.`);
       const mpPaymentResponse = await fetch(`https://api.mercadopago.com/v1/payments/${paymentIdFromMP}`, {
         headers: {
           'Authorization': `Bearer ${accessToken}`,
         },
       });
-      
+
       console.log(`Webhook V3_API_CONFIRM: Received API response for MP Payment ID ${paymentIdFromMP}. HTTP Status: ${mpPaymentResponse.status}`);
-      const mpPayment = await mpPaymentResponse.json(); 
+      const mpPayment = await mpPaymentResponse.json();
 
       if (!mpPaymentResponse.ok) {
         console.error(`Webhook V3_API_CONFIRM: Failed to fetch payment details from Mercado Pago API for ID ${paymentIdFromMP}. Status: ${mpPaymentResponse.status}. Response: ${JSON.stringify(mpPayment)}`);
@@ -80,10 +82,17 @@ export async function POST(request: NextRequest) {
         console.log(`Webhook V3_API_CONFIRM: Processing 'approved' status from API for Sale ID: ${sale.id}, MP Payment ID: ${paymentIdFromMP}`);
         if (sale.status === 'pending_payment') {
           console.log(`Webhook V3_API_CONFIRM: Local sale ${sale.id} is 'pending_payment'. Attempting to update to 'paid'.`);
+          
+          const organizerNetRevenue = sale.preco_ingresso_unitario * sale.quantidade;
+          const clearanceDate = new Date(Date.now() + THREE_DAYS_IN_MS).toISOString();
+
           const updatedSaleData: Partial<SaleData> = {
             status: 'paid',
             data_pagamento_confirmado: new Date().toISOString(),
-            mp_payment_id: paymentIdFromMP, 
+            mp_payment_id: paymentIdFromMP,
+            organizer_net_revenue: organizerNetRevenue,
+            organizer_revenue_status: 'pending_clearance',
+            organizer_revenue_clearance_date: clearanceDate,
           };
           const updatedSale = await updateSale(sale.id, updatedSaleData);
 
@@ -91,7 +100,7 @@ export async function POST(request: NextRequest) {
             console.error(`Webhook V3_API_CONFIRM: CRITICAL - Failed to update sale ${sale.id} to 'paid' in DB.`);
             return NextResponse.json({ error: 'Failed to update sale status in DB' }, { status: 500 });
           }
-          console.log(`Webhook V3_API_CONFIRM: Sale ${updatedSale.id} successfully updated to 'paid'.`);
+          console.log(`Webhook V3_API_CONFIRM: Sale ${updatedSale.id} successfully updated to 'paid'. Organizer revenue fields set.`);
 
           console.log(`Webhook V3_API_CONFIRM: Attempting to update stock for Event ID: ${updatedSale.evento_id} by quantity: ${updatedSale.quantidade}.`);
           const stockUpdated = await updateEventStock(updatedSale.evento_id, updatedSale.quantidade);
@@ -104,23 +113,42 @@ export async function POST(request: NextRequest) {
           console.log(`Webhook V3_API_CONFIRM: Payment for sale ${updatedSale.id} approved (confirmed via API) and processed. Stock updated: ${stockUpdated}. Revalidating paths...`);
           revalidatePath('/');
           revalidatePath(`/event/${updatedSale.evento_id}`);
-          revalidatePath('/admin/dashboard'); 
-          revalidatePath(`/admin/events/${updatedSale.evento_id}/buyers`); 
-          revalidatePath('/organizer/dashboard'); 
-          revalidatePath(`/organizer/events/${updatedSale.evento_id}/buyers`); 
+          revalidatePath('/admin/dashboard');
+          revalidatePath(`/admin/events/${updatedSale.evento_id}/buyers`);
+          revalidatePath('/organizer/dashboard');
+          revalidatePath(`/organizer/events/${updatedSale.evento_id}/buyers`);
           console.log(`Webhook V3_API_CONFIRM: Paths revalidated for sale ${updatedSale.id}.`);
 
         } else if (sale.status === 'paid') {
-          console.log(`Webhook V3_API_CONFIRM: Sale ${sale.id} was already 'paid'. MP Payment ID in DB: ${sale.mp_payment_id}, Received MP Payment ID: ${paymentIdFromMP}. API status is 'approved'. No action taken.`);
+          console.log(`Webhook V3_API_CONFIRM: Sale ${sale.id} was already 'paid'. MP Payment ID in DB: ${sale.mp_payment_id}, Received MP Payment ID: ${paymentIdFromMP}. API status is 'approved'. No action taken for core sale status, but checking organizer revenue fields.`);
           if (sale.mp_payment_id && sale.mp_payment_id !== paymentIdFromMP) {
             console.warn(`Webhook V3_API_CONFIRM: Sale ${sale.id} was 'paid' with MP_ID ${sale.mp_payment_id}, but API confirmed 'approved' for a new MP_ID ${paymentIdFromMP}. This might be a duplicate payment attempt or a new payment on an already paid sale.`);
           }
-        } else { 
+          // Ensure organizer revenue fields are set even if sale was already marked paid (e.g., by manual check)
+          if (!sale.organizer_revenue_clearance_date) {
+            const organizerNetRevenue = sale.preco_ingresso_unitario * sale.quantidade;
+            const clearanceDate = new Date(Date.now() + THREE_DAYS_IN_MS).toISOString();
+            const updatedSale = await updateSale(sale.id, {
+                organizer_net_revenue: organizerNetRevenue,
+                organizer_revenue_status: 'pending_clearance',
+                organizer_revenue_clearance_date: clearanceDate,
+            });
+             console.log(`Webhook V3_API_CONFIRM: Organizer revenue fields updated for already paid sale ${updatedSale?.id}.`);
+          }
+
+        } else {
           console.warn(`Webhook V3_API_CONFIRM: Sale ${sale.id} has status ${sale.status}, but API confirmed 'approved' for MP_ID ${paymentIdFromMP}. Attempting to recover to 'paid'.`);
+          
+          const organizerNetRevenue = sale.preco_ingresso_unitario * sale.quantidade;
+          const clearanceDate = new Date(Date.now() + THREE_DAYS_IN_MS).toISOString();
+
           const updatedSaleData: Partial<SaleData> = {
             status: 'paid',
             data_pagamento_confirmado: new Date().toISOString(),
             mp_payment_id: paymentIdFromMP,
+            organizer_net_revenue: organizerNetRevenue,
+            organizer_revenue_status: 'pending_clearance',
+            organizer_revenue_clearance_date: clearanceDate,
           };
           const recoveredSale = await updateSale(sale.id, updatedSaleData);
           if (recoveredSale) {
@@ -142,10 +170,12 @@ export async function POST(request: NextRequest) {
         console.log(`Webhook V3_API_CONFIRM: Processing API status '${paymentStatusFromAPI}' for Sale ID: ${sale.id}, MP Payment ID: ${paymentIdFromMP}`);
         const newStatus = (paymentStatusFromAPI === 'rejected' || paymentStatusFromAPI === 'charged_back') ? 'failed' : 'cancelled';
         if (sale.status === 'pending_payment' || (sale.status === 'paid' && ['refunded', 'charged_back'].includes(paymentStatusFromAPI))) {
-          console.log(`Webhook V3_API_CONFIRM: Sale ${sale.id} (current status: ${sale.status}) will be updated to '${newStatus}' based on API status.`);
+          console.log(`Webhook V3_API_CONFIRM: Sale ${sale.id} (current status: ${sale.status}) will be updated to '${newStatus}' based on API.`);
           const updatedSaleData: Partial<SaleData> = {
             status: newStatus as 'failed' | 'cancelled',
-            mp_payment_id: paymentIdFromMP, 
+            mp_payment_id: paymentIdFromMP,
+            // If refunded/charged_back, organizer revenue should be marked or handled accordingly
+            // For now, just updating core status. Might need organizer_revenue_status = 'revoked' etc.
           };
           const saleBeforeUpdate = { ...sale };
           const updatedSale = await updateSale(sale.id, updatedSaleData);
@@ -161,8 +191,8 @@ export async function POST(request: NextRequest) {
             const event = await getEventById(saleBeforeUpdate.evento_id);
             if (event) {
               const newAvailable = event.quantidade_disponivel + saleBeforeUpdate.quantidade;
-              const finalAvailable = Math.min(newAvailable, event.quantidade_total); 
-              const stockReverted = await updateEventStock(saleBeforeUpdate.evento_id, -saleBeforeUpdate.quantidade, finalAvailable); 
+              const finalAvailable = Math.min(newAvailable, event.quantidade_total);
+              const stockReverted = await updateEventStock(saleBeforeUpdate.evento_id, -saleBeforeUpdate.quantidade, finalAvailable); // Negative quantity to add back
               if (stockReverted) {
                 console.log(`Webhook V3_API_CONFIRM: Stock successfully reverted for Event ID ${saleBeforeUpdate.evento_id}.`);
               } else {
@@ -184,7 +214,7 @@ export async function POST(request: NextRequest) {
         }
       } else if (paymentStatusFromAPI === 'pending' || paymentStatusFromAPI === 'in_process') {
         console.log(`Webhook V3_API_CONFIRM: Processing API status '${paymentStatusFromAPI}' for Sale ID: ${sale.id}, MP Payment ID: ${paymentIdFromMP}`);
-        if (sale.status !== 'pending_payment' && sale.status !== 'paid') { 
+        if (sale.status !== 'pending_payment' && sale.status !== 'paid') {
           console.log(`Webhook V3_API_CONFIRM: Sale ${sale.id} (current status: ${sale.status}) will be updated to 'pending_payment' based on API.`);
           const updatedSaleData: Partial<SaleData> = {
             status: 'pending_payment',
@@ -204,7 +234,7 @@ export async function POST(request: NextRequest) {
     }
 
     console.warn('Webhook V3_API_CONFIRM: Event type not handled or missing payment data. Type:', body.type, 'Action:', body.action);
-    return NextResponse.json({ message: 'Event type not handled by this webhook.' }, { status: 200 }); 
+    return NextResponse.json({ message: 'Event type not handled by this webhook.' }, { status: 200 });
 
   } catch (error) {
     let errorMessage = 'Internal server error processing webhook';
@@ -220,4 +250,3 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Internal server error processing webhook' }, { status: 500 });
   }
 }
-

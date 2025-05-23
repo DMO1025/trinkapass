@@ -1,7 +1,7 @@
 // src/services/mercado-pago-service.ts
 'use server';
 
-import { getSettings } from '@/lib/data-service.server';
+// import { getSettings } from '@/lib/data-service.server'; // Removed as settings are now primarily from env
 
 interface CreatePixPaymentMPResult {
   success: boolean;
@@ -25,11 +25,11 @@ export async function createPixPaymentMP(
   payerEmail: string,
   externalReference: string // Your internal sale ID
 ): Promise<CreatePixPaymentMPResult> {
-  const appSettings = await getSettings();
-  const accessToken = appSettings.mercadoPagoAccessToken || process.env.MERCADO_PAGO_ACCESS_TOKEN;
+  // Directly use environment variable for access token.
+  const accessToken = process.env.MERCADO_PAGO_ACCESS_TOKEN;
 
   if (!accessToken) {
-    console.error('Mercado Pago Access Token is not configured in settings or environment variables.');
+    console.error('Mercado Pago Access Token is not configured in environment variables.');
     return { success: false, error: 'Configuração de pagamento indisponível. Verifique as configurações do administrador.' };
   }
 
@@ -53,7 +53,7 @@ export async function createPixPaymentMP(
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${accessToken}`,
-        'X-Idempotency-Key': externalReference, 
+        'X-Idempotency-Key': externalReference,
       },
       body: JSON.stringify(paymentData),
     });
@@ -76,7 +76,7 @@ export async function createPixPaymentMP(
       }
       return { success: false, error: displayMessage };
     }
-    
+
     const pixCopyPaste = responseData.point_of_interaction?.transaction_data?.qr_code;
     const qrCodeBase64 = responseData.point_of_interaction?.transaction_data?.qr_code_base64;
     const paymentId = responseData.id?.toString();
@@ -102,8 +102,7 @@ export async function createPixPaymentMP(
 
 
 export async function getPaymentStatusMP(mpPaymentId: string): Promise<PaymentStatusMPResult> {
-  const appSettings = await getSettings();
-  const accessToken = appSettings.mercadoPagoAccessToken || process.env.MERCADO_PAGO_ACCESS_TOKEN;
+  const accessToken = process.env.MERCADO_PAGO_ACCESS_TOKEN;
 
   if (!accessToken) {
     console.error('Mercado Pago Access Token is not configured.');
@@ -129,13 +128,13 @@ export async function getPaymentStatusMP(mpPaymentId: string): Promise<PaymentSt
 
     if (!response.ok) {
       console.error(`Mercado Pago API Error fetching payment status for ID ${mpPaymentId}:`, responseData);
-      return { 
-        success: false, 
+      return {
+        success: false,
         error: responseData.message || `Erro ${response.status} ao buscar status do pagamento.`,
-        paymentId: mpPaymentId 
+        paymentId: mpPaymentId
       };
     }
-    
+
     return {
       success: true,
       status: responseData.status,
@@ -145,8 +144,8 @@ export async function getPaymentStatusMP(mpPaymentId: string): Promise<PaymentSt
 
   } catch (error) {
     console.error(`Network or other error fetching Mercado Pago payment status for ID ${mpPaymentId}:`, error);
-    return { 
-      success: false, 
+    return {
+      success: false,
       error: 'Erro de comunicação ao verificar status do pagamento.',
       paymentId: mpPaymentId
     };

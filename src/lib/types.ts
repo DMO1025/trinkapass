@@ -32,6 +32,9 @@ export interface SaleData {
   pix_copia_cola_mp?: string; // PIX code from Mercado Pago
   mp_payment_id?: string; // Mercado Pago payment ID
   mercado_pago_external_reference?: string; // The external_reference sent to Mercado Pago (e.g., TRK-EVENTIDSHORT-000000001)
+  organizer_net_revenue?: number; // Net revenue for the organizer from this sale
+  organizer_revenue_status?: 'pending_clearance' | 'cleared' | 'requested_withdrawal' | 'paid_out'; // Status of the organizer's portion
+  organizer_revenue_clearance_date?: string; // ISO string, when this revenue becomes available for withdrawal
 }
 
 // Fields provided by the client during purchase initiation
@@ -44,7 +47,7 @@ export interface PurchaseInitiationData {
 }
 
 // Data structure for creating a new sale record internally (after MP interaction)
-export interface NewSaleDataInternal extends Omit<SaleData, 'id'> {}
+export interface NewSaleDataInternal extends Omit<SaleData, 'id' | 'organizer_net_revenue' | 'organizer_revenue_status' | 'organizer_revenue_clearance_date'> {}
 
 
 export interface UserData {
@@ -130,7 +133,14 @@ export interface CepActionResult {
 
 export interface SettingsData {
   mercadoPagoAccessToken?: string;
+  serviceFeePerTicket?: number;
 }
+
+export interface PlatformSettingsUpdatePayload {
+    mercadoPagoAccessToken?: string;
+    serviceFeePerTicket?: number;
+}
+
 
 export interface InitiatePurchaseResult {
   success: boolean;

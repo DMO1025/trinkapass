@@ -83,6 +83,9 @@ export async function updateOrganizerSettingsAction(
     
     revalidatePath('/organizer/settings/withdrawal');
     revalidatePath('/organizer/dashboard'); 
+    // Revalidate paths related to sales if organizer verification impacts revenue display/status
+    // For example, if a cron job or other process updates sale.organizer_revenue_status
+    // revalidatePath('/organizer/events/.*/buyers'); // Example, adjust as needed
     
     return { success: true, message: 'Configurações de saque e verificação atualizadas com sucesso!', user: safeUpdatedUser };
 

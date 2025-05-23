@@ -1,3 +1,4 @@
+
 'use server';
 
 import { deleteUserById, deleteEventAndSalesById, updateWithdrawalRequestStatus } from '@/lib/data-service.server';
@@ -51,9 +52,16 @@ export async function adminUpdateWithdrawalStatusAction(
   try {
     const updatedRequest = await updateWithdrawalRequestStatus(requestId, status, adminNotes);
     if (updatedRequest) {
-      revalidatePath('/admin/dashboard'); // Revalidate admin dashboard to reflect changes
-      // Potentially, revalidate organizer's dashboard if they can see withdrawal status
-      // revalidatePath(`/organizer/dashboard`); 
+      revalidatePath('/admin/dashboard'); 
+      revalidatePath('/organizer/dashboard'); 
+      // Potentially revalidate specific organizer's event buyer pages if their revenue status is shown there
+      // Example: Revalidate all potential buyer list pages for that organizer
+      // This is broad; ideally, we'd revalidate more specifically if possible.
+      // For now, revalidating the organizer's dashboard is the primary concern.
+      // if (updatedRequest.organizerId) {
+      //    revalidatePath(`/organizer/events/[eventId]/buyers`, 'layout'); // May not work as expected with dynamic segments
+      // }
+
       return { 
         success: true, 
         message: `Solicitação de saque ${status === 'approved' ? 'aprovada' : 'rejeitada'} com sucesso.`,
@@ -66,4 +74,3 @@ export async function adminUpdateWithdrawalStatusAction(
     return { success: false, message: 'Ocorreu um erro ao atualizar o status da solicitação.' };
   }
 }
-

@@ -7,18 +7,18 @@ import * as z from 'zod';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 import { PlusCircle, Loader2, ArrowLeft, CalendarIcon, Search, Upload, Home } from 'lucide-react';
-import { useState } from 'react'; 
+import { useState, useEffect } from 'react'; 
 import { useAuth } from '@/contexts/AuthContext';
 import { createEventAction } from '@/app/actions/event-actions';
 import { fetchAddressByCepAction } from '@/app/actions/cep-actions';
+import { getServiceFeeAction } from '@/app/actions/settings-actions'; // Import to get service fee
 import type { EventCreationData } from '@/lib/types';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'; // Keep Popover for Calendar
-import { Calendar } from '@/components/ui/calendar'; // Keep Calendar
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { cn } from '@/lib/utils'; // For ShadCN components if any are kept
+import { cn } from '@/lib/utils';
 import Image from 'next/image';
-import { SERVICE_FEE_PER_TICKET } from '@/lib/constants';
 
 const cepRegex = /^\d{5}-?\d{3}$/;
 const MAX_FILE_SIZE_MB = 5;
@@ -47,6 +47,15 @@ export default function CreateEventPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isFetchingCep, setIsFetchingCep] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [serviceFeePerTicket, setServiceFeePerTicket] = useState<number>(0);
+
+  useEffect(() => {
+    async function fetchFee() {
+        const fee = await getServiceFeeAction();
+        setServiceFeePerTicket(fee);
+    }
+    fetchFee();
+  }, []);
 
   const form = useForm<CreateEventFormValues>({
     resolver: zodResolver(createEventSchema),
@@ -167,7 +176,7 @@ export default function CreateEventPage() {
       <button onClick={() => router.back()} className="btn btn-secondary mb-4 d-flex align-items-center gap-2">
         <ArrowLeft className="h-4 w-4" /> Voltar para o Painel
       </button>
-      <div className="card border"> {/* Removed shadow-xl */}
+      <div className="card border">
         <div className="card-header p-3 p-md-4 bg-light">
           <h1 className="card-title fs-2 fw-bold text-primary d-flex align-items-center gap-2">
             <PlusCircle className="h-8 w-8" /> Criar Novo Evento
@@ -202,7 +211,7 @@ export default function CreateEventPage() {
                         <button
                           type="button"
                           className={cn(
-                            "form-control text-start d-flex align-items-center", // Bootstrap form-control
+                            "form-control text-start d-flex align-items-center",
                             !field.value && "text-muted"
                           )}
                         >
@@ -210,7 +219,7 @@ export default function CreateEventPage() {
                           {field.value ? format(field.value, "PPP", { locale: ptBR }) : <span>Escolha uma data</span>}
                         </button>
                       </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0"> {/* Popover content remains ShadCN */}
+                      <PopoverContent className="w-auto p-0"> 
                         <Calendar
                           mode="single"
                           selected={field.value}
@@ -271,7 +280,7 @@ export default function CreateEventPage() {
                 <label htmlFor="preco_ingresso" className="form-label">Preço do Ingresso (R$)</label>
                 <input id="preco_ingresso" type="number" step="0.01" {...register('preco_ingresso')} className={`form-control ${errors.preco_ingresso ? 'is-invalid' : ''}`} />
                 {errors.preco_ingresso && <div className="invalid-feedback">{errors.preco_ingresso.message}</div>}
-                <div className="form-text">Será adicionada uma taxa de serviço de R$ {SERVICE_FEE_PER_TICKET.toFixed(2)} por ingresso.</div>
+                <div className="form-text">Será adicionada uma taxa de serviço de R$ {serviceFeePerTicket.toFixed(2)} por ingresso.</div>
               </div>
               <div className="col-md-6">
                 <label htmlFor="quantidade_total" className="form-label">Quantidade Total de Ingressos</label>

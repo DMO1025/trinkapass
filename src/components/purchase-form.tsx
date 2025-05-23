@@ -10,7 +10,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { Loader2, ShoppingCart, ClipboardCopy, CreditCard, AlertTriangle, Info, CheckCircle, RefreshCw, MinusCircle, PlusCircle } from 'lucide-react';
 import Image from 'next/image';
 import { initiatePurchaseAction, checkPaymentStatusAction } from '@/app/actions/purchase-actions';
-import { SERVICE_FEE_PER_TICKET } from '@/lib/constants';
+import { getServiceFeeAction } from '@/app/actions/settings-actions'; // Import to get service fee
 import { Textarea } from '@/components/ui/textarea';
 
 
@@ -51,6 +51,7 @@ export default function PurchaseForm({ event, onModalClose }: PurchaseFormProps)
   const [paymentConfirmedByClientCheck, setPaymentConfirmedByClientCheck] = useState(false);
   
   const [maxTickets, setMaxTickets] = useState(5); 
+  const [serviceFeePerTicket, setServiceFeePerTicket] = useState<number>(0);
 
   const storageKey = useMemo(() => `trinkapass_pending_purchase_${event?.id}`, [event?.id]);
 
@@ -68,19 +69,25 @@ export default function PurchaseForm({ event, onModalClose }: PurchaseFormProps)
   const selectedQuantity = watch('quantidade');
 
   const totalEventPrice = useMemo(() => event.preco_ingresso * selectedQuantity, [event.preco_ingresso, selectedQuantity]);
-  const totalServiceFee = useMemo(() => SERVICE_FEE_PER_TICKET * selectedQuantity, [selectedQuantity]);
+  const totalServiceFee = useMemo(() => serviceFeePerTicket * selectedQuantity, [selectedQuantity, serviceFeePerTicket]);
   const finalPurchaseAmount = useMemo(() => totalEventPrice + totalServiceFee, [totalEventPrice, totalServiceFee]);
 
   useEffect(() => {
+    async function fetchFee() {
+        const fee = await getServiceFeeAction();
+        setServiceFeePerTicket(fee);
+    }
+    fetchFee();
+  }, []);
+
+  useEffect(() => {
     setMaxTickets(Math.min(5, event.quantidade_disponivel));
-    // Ensure quantity does not exceed available maxTickets if maxTickets changes
     if (selectedQuantity > Math.min(5, event.quantidade_disponivel)) {
         setValue('quantidade', Math.min(5, event.quantidade_disponivel));
     }
   }, [event.quantidade_disponivel, selectedQuantity, setValue]);
   
   useEffect(() => {
-    // Ensure default quantity is 1 if maxTickets is > 0, otherwise 0
     if (maxTickets > 0 && selectedQuantity === 0) {
         setValue('quantidade', 1);
     } else if (maxTickets === 0) {
@@ -104,7 +111,6 @@ export default function PurchaseForm({ event, onModalClose }: PurchaseFormProps)
           setCurrentMpExternalReference(parsedData.mpExternalReference);
           if (parsedData.formValues) {
             reset(parsedData.formValues);
-             // Ensure quantity from storage doesn't exceed current availability
             if (parsedData.formValues.quantidade > maxTickets) {
                 setValue('quantidade', maxTickets > 0 ? 1 : 0);
             }
@@ -121,7 +127,7 @@ export default function PurchaseForm({ event, onModalClose }: PurchaseFormProps)
         console.error("Error parsing pending purchase data from localStorage", e);
         localStorage.removeItem(storageKey);
       }
-    } else if (maxTickets > 0) { // If no stored data, set default quantity if tickets available
+    } else if (maxTickets > 0) { 
         setValue('quantidade', 1);
     }
   }, [event?.id, storageKey, reset, maxTickets, setValue]);
@@ -357,7 +363,6 @@ export default function PurchaseForm({ event, onModalClose }: PurchaseFormProps)
                 <PlusCircle size={20} />
               </button>
             </div>
-            {/* Hidden input for react-hook-form to register the value */}
             <input type="hidden" {...register('quantidade', { valueAsNumber: true })} />
             {errors.quantidade && <div className="text-danger small mt-1">{errors.quantidade.message}</div>}
             {maxTickets === 0 && !errors.quantidade && <div className="text-danger small mt-1">Não há ingressos disponíveis.</div>}

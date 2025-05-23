@@ -1,3 +1,21 @@
 {
-  "/page": "app/page.js"
+  "/_not-found/page": "app/_not-found/page.js",
+  "/api/webhooks/mercadopago/route": "app/api/webhooks/mercadopago/route.js",
+  "/favicon.ico/route": "app/favicon.ico/route.js",
+  "/about/page": "app/about/page.js",
+  "/event/[id]/page": "app/event/[id]/page.js",
+  "/login/page": "app/login/page.js",
+  "/page": "app/page.js",
+  "/plans/page": "app/plans/page.js",
+  "/admin/dashboard/page": "app/admin/dashboard/page.js",
+  "/admin/profile/page": "app/admin/profile/page.js",
+  "/admin/events/[eventId]/buyers/page": "app/admin/events/[eventId]/buyers/page.js",
+  "/organizer/events/[eventId]/buyers/page": "app/organizer/events/[eventId]/buyers/page.js",
+  "/admin/settings/page": "app/admin/settings/page.js",
+  "/organizer/dashboard/page": "app/organizer/dashboard/page.js",
+  "/organizer/register/page": "app/organizer/register/page.js",
+  "/organizer/events/create/page": "app/organizer/events/create/page.js",
+  "/organizer/events/[eventId]/edit/page": "app/organizer/events/[eventId]/edit/page.js",
+  "/organizer/profile/page": "app/organizer/profile/page.js",
+  "/organizer/settings/withdrawal/page": "app/organizer/settings/withdrawal/page.js"
 }

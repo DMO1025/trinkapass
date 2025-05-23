@@ -1,8 +1,9 @@
+
 // src/app/admin/dashboard/page.tsx
 'use client';
 
 import { useAuth } from "@/contexts/AuthContext";
-import { ShieldCheck, User, Users, Trash2, Eye, BarChartHorizontalBig, Loader2, AlertTriangle, ShoppingBag, Ticket, DollarSign, TrendingUp, BadgeCheck, BadgeAlert, BadgeX, Send, WalletCards, CheckCircle, XCircle, MessageSquare, ListFilter, ChevronLeft, ChevronRight } from "lucide-react";
+import { ShieldCheck, User, Users, Trash2, Eye, BarChartHorizontalBig, Loader2, AlertTriangle, ShoppingBag, Ticket, DollarSign, TrendingUp, BadgeCheck, BadgeAlert, BadgeX, Send, WalletCards, CheckCircle, XCircle, MessageSquare, ListFilter, ChevronLeft, ChevronRight, PhoneOutgoing } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState, useMemo } from "react";
 import type { UserData, EventData, SaleData, WithdrawalRequestData } from "@/lib/types";
@@ -17,6 +18,7 @@ import Image from "next/image";
 interface CustomerSalesSummary {
   email: string;
   name: string;
+  whatsapp: string; // Added WhatsApp
   totalTickets: number;
   totalValue: number;
 }
@@ -80,7 +82,11 @@ export default function AdminDashboardPage() {
   const paidSales = useMemo(() => sales.filter(s => s.status === 'paid'), [sales]);
   const totalGrossSales = useMemo(() => paidSales.reduce((acc, s) => acc + s.valor_total_compra, 0), [paidSales]);
   const totalPlatformRevenue = useMemo(() => paidSales.reduce((acc, s) => acc + (s.taxa_servico_unitaria * s.quantidade), 0), [paidSales]);
-  const totalNetRevenueForOrganizers = useMemo(() => paidSales.reduce((acc, s) => acc + (s.preco_ingresso_unitario * s.quantidade), 0), [paidSales]);
+  
+  const totalNetRevenueForOrganizersAllSales = useMemo(() => {
+    return paidSales.reduce((sum, sale) => sum + (sale.organizer_net_revenue || 0), 0);
+  }, [paidSales]);
+
   const totalPaidTicketsSold = useMemo(() => paidSales.reduce((acc, s) => acc + s.quantidade, 0), [paidSales]);
   const eventNameMap = useMemo(() => new Map(events.map(e => [e.id, e.nome_evento])), [events]);
 
@@ -91,6 +97,7 @@ export default function AdminDashboardPage() {
         summary[sale.email_comprador] = {
           email: sale.email_comprador,
           name: sale.nome_comprador,
+          whatsapp: sale.whatsapp, // Include WhatsApp
           totalTickets: 0,
           totalValue: 0
         };
@@ -146,33 +153,40 @@ export default function AdminDashboardPage() {
     }
   };
 
-  const getStatusBadgeClass = (status: SaleData['status'] | WithdrawalRequestData['status']) => {
+  const getStatusBadgeClass = (status: SaleData['status'] | WithdrawalRequestData['status'] | SaleData['organizer_revenue_status']) => {
     switch (status) {
-      case 'paid': case 'approved': return 'bg-success text-white';
-      case 'pending_payment': case 'pending': return 'bg-warning text-dark';
-      case 'failed': case 'cancelled': case 'rejected': return 'bg-danger text-white';
+      case 'paid': case 'approved': case 'cleared': return 'bg-success text-white';
+      case 'pending_payment': case 'pending': case 'pending_clearance': return 'bg-warning text-dark';
+      case 'failed': case 'cancelled': case 'rejected': case 'paid_out': return 'bg-danger text-white';
+      case 'requested_withdrawal': return 'bg-info text-white';
       default: return 'bg-light text-dark border';
     }
   };
 
-  const getStatusIcon = (status: SaleData['status'] | WithdrawalRequestData['status']) => {
+  const getStatusIcon = (status: SaleData['status'] | WithdrawalRequestData['status'] | SaleData['organizer_revenue_status']) => {
     switch (status) {
-      case 'paid': case 'approved': return <BadgeCheck className="me-1 h-3 w-3" />;
-      case 'pending_payment': case 'pending': return <BadgeAlert className="me-1 h-3 w-3" />;
+      case 'paid': case 'approved': case 'cleared': return <BadgeCheck className="me-1 h-3 w-3" />;
+      case 'pending_payment': case 'pending': case 'pending_clearance': return <BadgeAlert className="me-1 h-3 w-3" />;
       case 'failed': case 'cancelled': case 'rejected': return <BadgeX className="me-1 h-3 w-3" />;
+      case 'paid_out': return <DollarSign className="me-1 h-3 w-3" />;
+      case 'requested_withdrawal': return <Send className="me-1 h-3 w-3" />;
       default: return null;
     }
   };
 
-  const getStatusText = (status: SaleData['status'] | WithdrawalRequestData['status']) => {
+  const getStatusText = (status: SaleData['status'] | WithdrawalRequestData['status'] | SaleData['organizer_revenue_status']) => {
     switch (status) {
       case 'paid': return 'Pago';
-      case 'pending_payment': return 'Pendente';
+      case 'pending_payment': return 'Pag. Pendente';
       case 'failed': return 'Falhou';
       case 'cancelled': return 'Cancelado';
       case 'pending': return 'Pendente (Saque)';
       case 'approved': return 'Aprovado (Saque)';
       case 'rejected': return 'Rejeitado (Saque)';
+      case 'pending_clearance': return 'Aguard. Liberação';
+      case 'cleared': return 'Liberado p/ Saque';
+      case 'requested_withdrawal': return 'Saque Solicitado';
+      case 'paid_out': return 'Pago (Organizador)';
       default: return status;
     }
   };
@@ -435,6 +449,8 @@ export default function AdminDashboardPage() {
                         <th scope="col">Email</th>
                         <th scope="col">Tipo</th>
                         <th scope="col">WhatsApp</th>
+                        <th scope="col" className="text-center">Contato</th>
+                        <th scope="col" className="text-center">Verificado</th>
                         <th scope="col" className="text-end">Ações</th>
                       </tr>
                     </thead>
@@ -445,6 +461,18 @@ export default function AdminDashboardPage() {
                           <td>{user.email}</td>
                           <td><span className={`badge small ${user.tipo === 'admin' ? 'bg-primary text-white' : user.tipo === 'organizer' ? 'bg-secondary text-white' : 'bg-info text-white'}`}>{user.tipo}</span></td>
                           <td>{user.whatsapp || '-'}</td>
+                          <td className="text-center">
+                            {user.whatsapp ? (
+                               <a href={`https://wa.me/55${user.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="btn btn-sm btn-success p-1 d-inline-flex align-items-center gap-1">
+                                <PhoneOutgoing className="h-3 w-3" /> Contatar
+                              </a>
+                            ): '-'}
+                          </td>
+                          <td className="text-center">
+                            {user.tipo === 'organizer' ? (
+                                user.is_verified ? <CheckCircle className="h-4 w-4 text-success" /> : <XCircle className="h-4 w-4 text-danger" />
+                            ): '-'}
+                          </td>
                           <td className="text-end">
                             {user.id !== adminUser.id && user.tipo !== 'admin' ? (
                               <AlertDialog>
@@ -497,7 +525,7 @@ export default function AdminDashboardPage() {
               {paginatedEvents.length > 0 ? (
                 <div className="vstack gap-3">
                   {paginatedEvents.map((event) => {
-                    const organizerNamePart = users.find(u => u.id === event.organizer_id)?.nome.substring(0,5) || event.organizer_id.split('-')[1]?.substring(0,4) || 'N/A';
+                    const organizerNamePart = users.find(u => u.id === event.organizer_id)?.nome.substring(0,10) || event.organizer_id.split('-')[1]?.substring(0,4) || 'N/A';
                     const eventDate = new Date(event.data_horario).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' });
                     const displayTitle = `${organizerNamePart} - ${event.nome_evento} - ${eventDate}`;
                     const eventTime = new Date(event.data_horario).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
@@ -578,8 +606,8 @@ export default function AdminDashboardPage() {
                 </div>
                 <div className="col-md-3 col-6">
                   <div className="p-3 bg-light-subtle border rounded-2">
-                    <p className="small text-muted mb-0">Total para Organizadores</p>
-                    <p className="fs-5 fw-bold text-secondary mb-0">R$ {totalNetRevenueForOrganizers.toFixed(2).replace('.', ',')}</p>
+                    <p className="small text-muted mb-0">Receita Líq. Organizadores</p>
+                    <p className="fs-5 fw-bold text-secondary mb-0">R$ {totalNetRevenueForOrganizersAllSales.toFixed(2).replace('.', ',')}</p>
                   </div>
                 </div>
                 <div className="col-md-3 col-6">
@@ -600,11 +628,12 @@ export default function AdminDashboardPage() {
                         <th>Comprador</th>
                         <th>Email</th>
                         <th className="text-center">Qtd.</th>
-                        <th className="text-end">Preço Un. (Org)</th>
+                        <th className="text-end">Receita Líq. Org. (Un.)</th>
                         <th className="text-end">Taxa Un. (Plat.)</th>
                         <th className="text-end">Total Venda</th>
                         <th>Data Compra</th>
-                        <th className="text-center">Status</th>
+                        <th className="text-center">Status Pag.</th>
+                        <th className="text-center">Status Receita Org.</th>
                         <th>ID Pag. MP</th>
                       </tr>
                     </thead>
@@ -623,6 +652,13 @@ export default function AdminDashboardPage() {
                             <span className={`badge small ${getStatusBadgeClass(sale.status)} d-inline-flex align-items-center`}>
                               {getStatusIcon(sale.status)} {getStatusText(sale.status)}
                             </span>
+                          </td>
+                           <td className="text-center">
+                            {sale.status === 'paid' && sale.organizer_revenue_status ? (
+                                <span className={`badge small ${getStatusBadgeClass(sale.organizer_revenue_status)} d-inline-flex align-items-center`}>
+                                  {getStatusIcon(sale.organizer_revenue_status)} {getStatusText(sale.organizer_revenue_status)}
+                                </span>
+                            ) : (sale.status === 'paid' ? <span className="badge small bg-secondary text-white">N/A</span> : '-')}
                           </td>
                           <td>{sale.mp_payment_id || '-'}</td>
                         </tr>
@@ -655,6 +691,7 @@ export default function AdminDashboardPage() {
                       <tr>
                         <th scope="col">Nome do Cliente</th>
                         <th scope="col">Email do Cliente</th>
+                        <th scope="col">WhatsApp</th>
                         <th scope="col" className="text-center">Total de Ingressos</th>
                         <th scope="col" className="text-end">Valor Total Gasto (R$)</th>
                       </tr>
@@ -664,6 +701,18 @@ export default function AdminDashboardPage() {
                         <tr key={summary.email}>
                           <td className="fw-medium">{summary.name}</td>
                           <td>{summary.email}</td>
+                          <td>
+                            {summary.whatsapp ? (
+                              <span className="d-flex align-items-center gap-2">
+                                <span>{summary.whatsapp}</span>
+                                <a href={`https://wa.me/55${summary.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="btn btn-sm btn-success p-1 d-inline-flex align-items-center gap-1">
+                                  <PhoneOutgoing className="h-3 w-3" /> Contatar
+                                </a>
+                              </span>
+                            ) : (
+                              '-'
+                            )}
+                          </td>
                           <td className="text-center">{summary.totalTickets}</td>
                           <td className="text-end">{summary.totalValue.toFixed(2).replace('.', ',')}</td>
                         </tr>
@@ -682,5 +731,8 @@ export default function AdminDashboardPage() {
     </div>
   );
 }
+
+    
+
 
 

@@ -6,16 +6,17 @@ import {
   getEventById, 
   updateEventStock, 
   getUserById, 
-  getSaleById, // Keep for direct sale lookup if needed elsewhere, but webhook will use mpExternalRef
   updateSale,
-  updateEventSaleReferenceCounter, // New function to update event counter
-  getSaleByMercadoPagoExternalReference 
+  updateEventSaleReferenceCounter, 
+  getSaleByMercadoPagoExternalReference,
+  getSettings // Import getSettings
 } from '@/lib/data-service';
 import type { PurchaseInitiationData, SaleData, UserData, NewSaleDataInternal, CheckPaymentStatusResult, InitiatePurchaseResult } from '@/lib/types';
-import { SERVICE_FEE_PER_TICKET } from '@/lib/constants';
+// import { SERVICE_FEE_PER_TICKET } from '@/lib/constants'; // Removed, will fetch from settings
 import { createPixPaymentMP, getPaymentStatusMP } from '@/services/mercado-pago-service';
-// import { v4 as uuidv4 } from 'uuid'; // No longer needed for tempSaleId if mpExternalReference is the primary external key for MP
 import { revalidatePath } from 'next/cache';
+
+const THREE_DAYS_IN_MS = 3 * 24 * 60 * 60 * 1000;
 
 export async function initiatePurchaseAction(purchaseData: PurchaseInitiationData): Promise<InitiatePurchaseResult> {
   try {
@@ -27,13 +28,16 @@ export async function initiatePurchaseAction(purchaseData: PurchaseInitiationDat
       return { success: false, error: 'Ingressos insuficientes disponíveis.' };
     }
 
+    const settings = await getSettings();
+    const taxaServicoUnitaria = settings.serviceFeePerTicket || 0; // Fallback to 0 if not set
+
+
     // Generate sequential external reference for Mercado Pago
     const currentCounter = event.next_sale_reference_number || 1;
     const eventIdPart = event.id.startsWith('evt-') ? event.id.substring(4, 12) : event.id.substring(0,8);
     const mercadoPagoExternalReference = `TRK-${eventIdPart}-${String(currentCounter).padStart(9, '0')}`;
 
     const precoIngressoUnitario = event.preco_ingresso;
-    const taxaServicoUnitaria = SERVICE_FEE_PER_TICKET;
     const valorTotalItem = precoIngressoUnitario + taxaServicoUnitaria;
     const valorTotalCompra = valorTotalItem * purchaseData.quantidade;
 
@@ -41,14 +45,13 @@ export async function initiatePurchaseAction(purchaseData: PurchaseInitiationDat
       valorTotalCompra,
       `Ingressos para ${event.nome_evento} (TrinkaPass)`,
       purchaseData.email_comprador,
-      mercadoPagoExternalReference // Use the new sequential reference for MP
+      mercadoPagoExternalReference 
     );
 
     if (!mpResult.success || !mpResult.pixCopyPaste || !mpResult.paymentId) {
       return { success: false, error: mpResult.error || 'Falha ao gerar PIX com o Mercado Pago.' };
     }
 
-    // Update event counter after successful MP PIX generation
     const counterUpdated = await updateEventSaleReferenceCounter(event.id, currentCounter + 1);
     if (!counterUpdated) {
       console.error(`CRITICAL: Failed to update sale reference counter for event ${event.id} after MP PIX generation. Expected next: ${currentCounter + 1}`);
@@ -121,14 +124,21 @@ export async function checkPaymentStatusAction(mpPaymentId: string, mpExternalRe
       if (saleToConfirm) {
         if (saleToConfirm.status === 'pending_payment') {
           console.log(`checkPaymentStatusAction: Confirming sale ${saleToConfirm.id} (MP Ext Ref: ${effectiveExternalReference}) based on MP status 'approved'. Current DB status: '${saleToConfirm.status}'.`);
+          
+          const organizerNetRevenue = saleToConfirm.preco_ingresso_unitario * saleToConfirm.quantidade;
+          const clearanceDate = new Date(Date.now() + THREE_DAYS_IN_MS).toISOString();
+
           const updatedSale = await updateSale(saleToConfirm.id, {
               status: 'paid',
               data_pagamento_confirmado: new Date().toISOString(),
-              mp_payment_id: mpApiResult.paymentId, 
+              mp_payment_id: mpApiResult.paymentId,
+              organizer_net_revenue: organizerNetRevenue,
+              organizer_revenue_status: 'pending_clearance',
+              organizer_revenue_clearance_date: clearanceDate,
           });
 
           if (updatedSale) {
-              console.log(`checkPaymentStatusAction: Sale ${updatedSale.id} status updated to 'paid'. Updating stock.`);
+              console.log(`checkPaymentStatusAction: Sale ${updatedSale.id} status updated to 'paid'. Organizer revenue fields set. Updating stock.`);
               const stockUpdated = await updateEventStock(updatedSale.evento_id, updatedSale.quantidade);
               if (!stockUpdated) {
                   console.error(`checkPaymentStatusAction: CRITICAL - Failed to update stock for event ${updatedSale.evento_id} after sale ${updatedSale.id} confirmation.`);
@@ -214,3 +224,4 @@ Obrigado(a)!`;
     };
   }
 }
+

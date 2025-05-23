@@ -1,0 +1,21 @@
+{
+  "/_not-found/page": "/_not-found",
+  "/api/webhooks/mercadopago/route": "/api/webhooks/mercadopago",
+  "/favicon.ico/route": "/favicon.ico",
+  "/about/page": "/about",
+  "/event/[id]/page": "/event/[id]",
+  "/login/page": "/login",
+  "/page": "/",
+  "/plans/page": "/plans",
+  "/admin/dashboard/page": "/admin/dashboard",
+  "/admin/profile/page": "/admin/profile",
+  "/admin/events/[eventId]/buyers/page": "/admin/events/[eventId]/buyers",
+  "/organizer/events/[eventId]/buyers/page": "/organizer/events/[eventId]/buyers",
+  "/admin/settings/page": "/admin/settings",
+  "/organizer/dashboard/page": "/organizer/dashboard",
+  "/organizer/register/page": "/organizer/register",
+  "/organizer/events/create/page": "/organizer/events/create",
+  "/organizer/events/[eventId]/edit/page": "/organizer/events/[eventId]/edit",
+  "/organizer/profile/page": "/organizer/profile",
+  "/organizer/settings/withdrawal/page": "/organizer/settings/withdrawal"
+}
