@@ -1,19 +1,17 @@
 // src/services/mercado-pago-service.ts
 'use server';
 
-// import { getSettings } from '@/lib/data-service.server'; // Removed as settings are now primarily from env
-
 interface CreatePixPaymentMPResult {
   success: boolean;
   pixCopyPaste?: string;
-  qrCodeBase64?: string; // Base64 string for the QR code image
-  paymentId?: string; // Mercado Pago's payment ID
+  qrCodeBase64?: string; 
+  paymentId?: string; 
   error?: string;
 }
 
 export interface PaymentStatusMPResult {
   success: boolean;
-  status?: string; // e.g., 'approved', 'pending_payment', 'rejected', 'cancelled'
+  status?: string; 
   paymentId?: string;
   externalReference?: string;
   error?: string;
@@ -23,9 +21,8 @@ export async function createPixPaymentMP(
   amount: number,
   description: string,
   payerEmail: string,
-  externalReference: string // Your internal sale ID
+  externalReference: string 
 ): Promise<CreatePixPaymentMPResult> {
-  // Directly use environment variable for access token.
   const accessToken = process.env.MERCADO_PAGO_ACCESS_TOKEN;
 
   if (!accessToken) {
@@ -33,7 +30,6 @@ export async function createPixPaymentMP(
     return { success: false, error: 'Configuração de pagamento indisponível. Verifique as configurações do administrador.' };
   }
 
-  // Ensure amount is correctly formatted (e.g., two decimal places for Mercado Pago)
   const formattedAmount = parseFloat(amount.toFixed(2));
 
   const paymentData = {
@@ -44,7 +40,7 @@ export async function createPixPaymentMP(
       email: payerEmail,
     },
     external_reference: externalReference,
-    // notification_url: Set this in your Mercado Pago dashboard if possible, or dynamically if needed
+    // notification_url: process.env.MERCADO_PAGO_WEBHOOK_URL, // Ensure this is set in your env
   };
 
   try {
@@ -53,7 +49,7 @@ export async function createPixPaymentMP(
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${accessToken}`,
-        'X-Idempotency-Key': externalReference,
+        'X-Idempotency-Key': externalReference, 
       },
       body: JSON.stringify(paymentData),
     });
@@ -80,7 +76,6 @@ export async function createPixPaymentMP(
     const pixCopyPaste = responseData.point_of_interaction?.transaction_data?.qr_code;
     const qrCodeBase64 = responseData.point_of_interaction?.transaction_data?.qr_code_base64;
     const paymentId = responseData.id?.toString();
-
 
     if (!pixCopyPaste) {
         console.error('Mercado Pago API did not return PIX copy/paste code:', responseData);
@@ -114,7 +109,7 @@ export async function getPaymentStatusMP(mpPaymentId: string): Promise<PaymentSt
   }
 
   try {
-    console.log(`Fetching payment status for MP Payment ID: ${mpPaymentId}`);
+    // console.log(`Fetching payment status for MP Payment ID: ${mpPaymentId}`);
     const response = await fetch(`https://api.mercadopago.com/v1/payments/${mpPaymentId}`, {
       method: 'GET',
       headers: {
@@ -123,8 +118,7 @@ export async function getPaymentStatusMP(mpPaymentId: string): Promise<PaymentSt
     });
 
     const responseData = await response.json();
-    console.log(`MP API Response for ${mpPaymentId} status: ${response.status}`, responseData);
-
+    // console.log(`MP API Response for ${mpPaymentId} status: ${response.status}`, responseData);
 
     if (!response.ok) {
       console.error(`Mercado Pago API Error fetching payment status for ID ${mpPaymentId}:`, responseData);

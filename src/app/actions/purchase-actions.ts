@@ -9,10 +9,9 @@ import {
   updateSale,
   updateEventSaleReferenceCounter, 
   getSaleByMercadoPagoExternalReference,
-  getSettings // Import getSettings
+  getSettings // Import getSettings to fetch service fee
 } from '@/lib/data-service';
 import type { PurchaseInitiationData, SaleData, UserData, NewSaleDataInternal, CheckPaymentStatusResult, InitiatePurchaseResult } from '@/lib/types';
-// import { SERVICE_FEE_PER_TICKET } from '@/lib/constants'; // Removed, will fetch from settings
 import { createPixPaymentMP, getPaymentStatusMP } from '@/services/mercado-pago-service';
 import { revalidatePath } from 'next/cache';
 
@@ -29,10 +28,9 @@ export async function initiatePurchaseAction(purchaseData: PurchaseInitiationDat
     }
 
     const settings = await getSettings();
-    const taxaServicoUnitaria = settings.serviceFeePerTicket || 0; // Fallback to 0 if not set
+    const taxaServicoUnitaria = settings.serviceFeePerTicket || 0; 
 
 
-    // Generate sequential external reference for Mercado Pago
     const currentCounter = event.next_sale_reference_number || 1;
     const eventIdPart = event.id.startsWith('evt-') ? event.id.substring(4, 12) : event.id.substring(0,8);
     const mercadoPagoExternalReference = `TRK-${eventIdPart}-${String(currentCounter).padStart(9, '0')}`;
@@ -59,6 +57,7 @@ export async function initiatePurchaseAction(purchaseData: PurchaseInitiationDat
 
     const newSaleRecord: NewSaleDataInternal = {
       evento_id: purchaseData.evento_id,
+      organizer_id: event.organizer_id, // Add organizer_id to the sale record
       nome_comprador: purchaseData.nome_comprador,
       email_comprador: purchaseData.email_comprador,
       whatsapp: purchaseData.whatsapp,
@@ -159,7 +158,6 @@ export async function checkPaymentStatusAction(mpPaymentId: string, mpExternalRe
             console.log(`checkPaymentStatusAction: Sale ${saleToConfirm.id} (MP Ext Ref: ${effectiveExternalReference}) is already in status '${saleToConfirm.status}'. No DB update needed by manual check.`);
         }
         
-        // Prepare WhatsApp info regardless of DB update if MP says approved
         const event = await getEventById(saleToConfirm.evento_id);
         if (event && event.organizer_id) {
             const organizer = await getUserById(event.organizer_id);
@@ -177,10 +175,9 @@ Obrigado(a)!`;
         }
       } else {
           console.warn(`checkPaymentStatusAction: Sale with MP External Reference ${effectiveExternalReference} not found, but MP API reported 'approved'.`);
-          // User message will be set below if not 'approved'
       }
-      userMessage = 'Pagamento Aprovado!'; // This is the primary message if MP status is 'approved'
-    } else { // Handle non-approved statuses from MP
+      userMessage = 'Pagamento Aprovado!';
+    } else { 
         switch (mpApiResult.status) {
         case 'pending_payment':
         case 'in_process':
@@ -206,7 +203,7 @@ Obrigado(a)!`;
 
     return {
       success: true,
-      paymentStatus: mpApiResult.status, // Return the actual status from MP API
+      paymentStatus: mpApiResult.status,
       message: userMessage,
       saleId: effectiveExternalReference, 
       mpPaymentId: mpApiResult.paymentId,
@@ -224,4 +221,3 @@ Obrigado(a)!`;
     };
   }
 }
-

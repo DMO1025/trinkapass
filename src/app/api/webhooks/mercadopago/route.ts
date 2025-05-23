@@ -1,21 +1,16 @@
 // src/app/api/webhooks/mercadopago/route.ts
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
-import { updateSale, getSaleByMercadoPagoExternalReference, updateEventStock, getEventById } from '@/lib/data-service.server'; // getSettings removed
+import { updateSale, getSaleByMercadoPagoExternalReference, updateEventStock, getEventById } from '@/lib/data-service.server';
 import type { SaleData } from '@/lib/types';
 import { revalidatePath } from 'next/cache';
-
-// IMPORTANT: In a production environment, you MUST verify the webhook signature
-// from Mercado Pago to ensure the request is legitimate.
-// This usually involves using a shared secret.
-// const MERCADO_PAGO_WEBHOOK_SECRET = process.env.MERCADO_PAGO_WEBHOOK_SECRET;
 
 const THREE_DAYS_IN_MS = 3 * 24 * 60 * 60 * 1000;
 
 export async function POST(request: NextRequest) {
   console.log('Mercado Pago Webhook Received -- LOGGING_ROUTE_ENTRY_V3_API_CONFIRM');
   let paymentIdFromMP: string | undefined;
-  let saleExternalRefFromMPAPI: string | undefined; // This will be the TRK-... reference
+  let saleExternalRefFromMPAPI: string | undefined; 
 
   try {
     const body = await request.json();
@@ -33,7 +28,6 @@ export async function POST(request: NextRequest) {
 
       console.log(`Webhook V3_API_CONFIRM: Processing MP Payment ID ${paymentIdFromMP} from type '${body.type}'. Action: '${body.action}'.`);
 
-      // Use environment variable directly for the access token
       const accessToken = process.env.MERCADO_PAGO_ACCESS_TOKEN;
 
       if (!accessToken) {
@@ -124,7 +118,6 @@ export async function POST(request: NextRequest) {
           if (sale.mp_payment_id && sale.mp_payment_id !== paymentIdFromMP) {
             console.warn(`Webhook V3_API_CONFIRM: Sale ${sale.id} was 'paid' with MP_ID ${sale.mp_payment_id}, but API confirmed 'approved' for a new MP_ID ${paymentIdFromMP}. This might be a duplicate payment attempt or a new payment on an already paid sale.`);
           }
-          // Ensure organizer revenue fields are set even if sale was already marked paid (e.g., by manual check)
           if (!sale.organizer_revenue_clearance_date) {
             const organizerNetRevenue = sale.preco_ingresso_unitario * sale.quantidade;
             const clearanceDate = new Date(Date.now() + THREE_DAYS_IN_MS).toISOString();
@@ -174,8 +167,6 @@ export async function POST(request: NextRequest) {
           const updatedSaleData: Partial<SaleData> = {
             status: newStatus as 'failed' | 'cancelled',
             mp_payment_id: paymentIdFromMP,
-            // If refunded/charged_back, organizer revenue should be marked or handled accordingly
-            // For now, just updating core status. Might need organizer_revenue_status = 'revoked' etc.
           };
           const saleBeforeUpdate = { ...sale };
           const updatedSale = await updateSale(sale.id, updatedSaleData);
@@ -192,7 +183,7 @@ export async function POST(request: NextRequest) {
             if (event) {
               const newAvailable = event.quantidade_disponivel + saleBeforeUpdate.quantidade;
               const finalAvailable = Math.min(newAvailable, event.quantidade_total);
-              const stockReverted = await updateEventStock(saleBeforeUpdate.evento_id, -saleBeforeUpdate.quantidade, finalAvailable); // Negative quantity to add back
+              const stockReverted = await updateEventStock(saleBeforeUpdate.evento_id, -saleBeforeUpdate.quantidade, finalAvailable); 
               if (stockReverted) {
                 console.log(`Webhook V3_API_CONFIRM: Stock successfully reverted for Event ID ${saleBeforeUpdate.evento_id}.`);
               } else {
